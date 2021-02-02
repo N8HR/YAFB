@@ -31,9 +31,7 @@
 #include <AsyncTCP.h>           // For Webserver
 #include <ESPAsyncWebServer.h>  // For Webserver
 #include <ESPmDNS.h>            // For DNS resolving
-#include <DRA818.h>             // For SA818
-#include <TimeLib.h>               // For Clock
-#include "time.h"
+#include "sys/time.h"
 
 
 
@@ -492,6 +490,7 @@ void setup()
       String temp = request->getParam("webcurrentdate")->value();
       Serial.print("webcurrentdate value: ");
       Serial.println(temp);
+      
       strptime(temp.c_str(), "%Y-%m-%d", &tmcurrenttime);
     }
 
@@ -500,6 +499,7 @@ void setup()
       String temp = request->getParam("webcurrenttime")->value();
       Serial.print("webcurrenttime value: ");
       Serial.println(temp);
+//      setTime();
       strptime(temp.c_str(), "%H:%M", &tmcurrenttime);
     }
     
@@ -534,12 +534,11 @@ void setup()
       Serial.println(temp);
       strptime(temp.c_str(), "%H:%M", &tmendtime);
     }
-    
-    time_t temp[30];
-    strftime(temp, 30, "%H, %M, %S, %d, %m, %Y", &tmcurrenttime);
-    Serial.print("test: ");
-    Serial.println(temp);
-    setTime(temp);
+
+    struct timeval tv;
+    time_t allthoseseconds = mktime(&tmcurrenttime);
+    tv.tv_sec = allthoseseconds;
+    settimeofday(&tv, NULL);
 
        
     request->send(200, "text/html", "HTTP GET request sent to your ESP on input field <br><a href=\"/\">Return to Home Page</a>");
@@ -553,7 +552,7 @@ void setup()
 void loop()
 {
   delay(1000);
-  printLocalTime();
+//  printLocalTime();
 }
 
 // This function sets the NeoPixel to the RGB value given
