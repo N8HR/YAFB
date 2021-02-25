@@ -150,13 +150,13 @@ void IRAM_ATTR onTimer()
 
         // Start of dacWrite() emulation ...
         CLEAR_PERI_REG_MASK(SENS_SAR_DAC_CTRL1_REG, SENS_SW_TONE_EN);  //Disable Tone
-        if(DacPin==25) {
+        if(DacPin==17) {
 //          pinMode(DacPin, ANALOG);  // Don't enable, will cause reboot during E2Prom writes. Pre-Set by dacWrite() in XT_DAC_Audio_Class init.
             CLEAR_PERI_REG_MASK(SENS_SAR_DAC_CTRL2_REG, SENS_DAC_CW_EN1_M);
             SET_PERI_REG_BITS(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_DAC, LastDacValue, RTC_IO_PDAC1_DAC_S);
             SET_PERI_REG_MASK(RTC_IO_PAD_DAC1_REG, RTC_IO_PDAC1_XPD_DAC | RTC_IO_PDAC1_DAC_XPD_FORCE);
         }
-        else if(DacPin==26) {
+        else if(DacPin==18) {
 //          pinMode(DacPin, ANALOG);   // Don't enable, will cause reboot during E2Prom writes. Pre-Set by dacWrite() in XT_DAC_Audio_Class init.
             CLEAR_PERI_REG_MASK(SENS_SAR_DAC_CTRL2_REG, SENS_DAC_CW_EN2_M);
             SET_PERI_REG_BITS(RTC_IO_PAD_DAC2_REG, RTC_IO_PDAC2_DAC, LastDacValue, RTC_IO_PDAC2_DAC_S);
