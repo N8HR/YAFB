@@ -25,7 +25,7 @@
 #include "HardwareSerial.h"
 #include "soc/sens_reg.h"  // For dacWrite() patch, TEB Sep-16-2019
 
-#include "soc/rtc_io_reg.h" // if not included, compile error, Greg Stoike
+#include "soc/rtc_io_reg.h" // compile error if not included, Arduino 1.8.13, Greg Stoike (KN4CK) Feb-24-2021 
 
 
 
