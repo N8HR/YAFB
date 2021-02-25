@@ -60,7 +60,7 @@ class AsyncAbstractResponse: public AsyncWebServerResponse {
 };
 
 #ifndef TEMPLATE_PLACEHOLDER
-#define TEMPLATE_PLACEHOLDER '%'
+#define TEMPLATE_PLACEHOLDER '~'
 #endif
 
 #define TEMPLATE_PARAM_NAME_LENGTH 32
