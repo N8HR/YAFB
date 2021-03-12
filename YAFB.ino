@@ -22,9 +22,6 @@
  */
 
 #include <Adafruit_NeoPixel.h>  // Used for the NeoPixel LED on GPIO 18
-#include <FS.h>                 // For SD Card
-#include <SPI.h>                // For SD Card
-#include <SD.h>                 // For SD Card
 #include <WiFi.h>               // For Wifi
 #include <WiFiAP.h>             // For WiFi
 #include <WiFiClient.h>         // For WiFi
@@ -36,6 +33,7 @@
 
 // Initial Fox Settings if nothing set
 char callsign[15] = "N0CALL";
+String convertedmessage;
 int timebetween = 60000; // Time between transmissions in miliseconds (1 sec = 1000 miliseconds)
 boolean onoff = false; // false = off, true = on
 struct tm tmcurrenttime = {0};
@@ -50,9 +48,9 @@ byte squelch = 1; // Squelch 0-8, 0 is listen/open
 byte volume = 5; // Volume 1-8
 
 // WiFi Settings
-const char* ssid = "YAFB";
-const char* password = "11111111";
-const uint8_t channel = 11;
+const char* wifi_ssid = "YAFB";
+const char* wifi_password = "11111111";
+const uint8_t wifi_channel = 11;
 IPAddress local_IP(10,73,73,73);
 IPAddress gateway(10,73,73,1);
 IPAddress subnet(255,255,255,0);
@@ -418,6 +416,7 @@ void setup()
   // Start Serial for debugging
   Serial.begin(115200); // Serial for ESP32-S2 board
   Serial1.begin(9600, SERIAL_8N1, 6, 7); // Serial for SA818 using pins GPIO7 & GPIO8
+  delay(1000);
 
   // Start the I2C interface
   Wire.begin();
@@ -429,7 +428,7 @@ void setup()
   
   // Start Wifi and put in AP mode
   WiFi.softAPConfig(local_IP, gateway, subnet);
-  WiFi.softAP(ssid, password, channel);
+  WiFi.softAP(wifi_ssid, wifi_password, wifi_channel);
 
   // Start mDNS to allow yafb.local to work
   if (!MDNS.begin("yafb")) 
@@ -472,6 +471,7 @@ void setup()
       temp.toCharArray(callsign, stringlength);
       Serial.print("webcallsign value: ");
       Serial.println(callsign);
+      createAndStoreMorse(callsign);
     }
     
     if (request->hasParam("webtxfrequency")) 
@@ -575,10 +575,14 @@ void setup()
 
   updateSysTime();
   
+  playMelody();
 }
 
 /****************************************************************************** 
  * Standard Loop Function
+ * 
+ * Periodically update the ESP32 time from the RTC
+ * Play the audio melody then play the identification in morse code then wait
  ******************************************************************************/
 void loop()
 {
@@ -591,7 +595,7 @@ void loop()
   }
 
   // Start Transmittion
-
+  playMorse();
   // End Transmittion
 
   // Delay Between Transmittions
