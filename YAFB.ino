@@ -22,23 +22,18 @@
  */
 
 #include <Adafruit_NeoPixel.h>  // Used for the NeoPixel LED on GPIO 18
-#include <FS.h>                 // For SD Card
-#include <SPI.h>                // For SD Card
-#include <SD.h>                 // For SD Card
 #include <WiFi.h>               // For Wifi
 #include <WiFiAP.h>             // For WiFi
 #include <WiFiClient.h>         // For WiFi
 #include <AsyncTCP.h>           // For Webserver
 #include <ESPAsyncWebServer.h>  // For Webserver
 #include <ESPmDNS.h>            // For DNS resolving
-#include <DRA818.h>             // For SA818
-#include <TimeLib.h>               // For Clock
-#include "time.h"
-
-
+#include "RTClib.h"             // For DS3231 RTC Module
+#include <Wire.h>               // For I2C Communication (DS3231)
 
 // Initial Fox Settings if nothing set
 char callsign[15] = "N0CALL";
+String convertedmessage;
 int timebetween = 60000; // Time between transmissions in miliseconds (1 sec = 1000 miliseconds)
 boolean onoff = false; // false = off, true = on
 struct tm tmcurrenttime = {0};
@@ -53,9 +48,9 @@ byte squelch = 1; // Squelch 0-8, 0 is listen/open
 byte volume = 5; // Volume 1-8
 
 // WiFi Settings
-const char* ssid = "YAFB";
-const char* password = "11111111";
-const uint8_t channel = 11;
+const char* wifi_ssid = "YAFB";
+const char* wifi_password = "11111111";
+const uint8_t wifi_channel = 11;
 IPAddress local_IP(10,73,73,73);
 IPAddress gateway(10,73,73,1);
 IPAddress subnet(255,255,255,0);
@@ -179,10 +174,11 @@ const char index_html[] PROGMEM = R"rawliteral(
       .container 
       {
         display: grid;
-        grid-template-columns: max-content 150px 150px;
+        grid-template-columns: 120px 150px 150px;
         grid-gap: 10px;
         justify-content: center;
         align-items: center;
+        padding-bottom: 20px;
       }
   
       .titlebox
@@ -205,7 +201,12 @@ const char index_html[] PROGMEM = R"rawliteral(
     <div class="titlebox"><h2>Yet Another Foxbox</h2></div>
     <div>Transmitter:</div>
     <div class="spantwo"><label class="switch"><input type="checkbox" name="webonoff" ~ONOFF~><span class="slider round"></span></label></div>
-  
+    <div><input type="reset"></div>
+    <div><input type="submit" value="Submit"></div>
+  </div>
+  </form>
+  <form action="/get">
+  <div class="container">
     <div><label class="textlabel" for="callsign">Callsign:</label></div>
     <div class="spantwo"><input type="text" id="callsign" name="webcallsign" value=~CALLSIGN~></div>
   
@@ -223,7 +224,12 @@ const char index_html[] PROGMEM = R"rawliteral(
   
     <div><label for="squelch">Squelch:</label></div>
     <div class="spantwo"><select id="squelch" name ="websquelch">~SQUELCH~</select></div>
-
+    <div><input type="reset"></div>
+    <div><input type="submit" value="Submit"></div>
+  </div>
+  </form>
+  <form action="/get">
+  <div class="container">
     <div><label for="currenttime">Current time:</label></div>
     <div><input type="date" id="currentdate" name="webcurrentdate" value=~CURRENTDATE~></div>
     <div><input type="time" id="currenttime" name="webcurrenttime" value=~CURRENTTIME~></div>
@@ -386,8 +392,17 @@ Adafruit_NeoPixel NeoPixel(1, NeoPixel_PIN, NEO_GRB + NEO_KHZ800);
 // ESP32-S2 Settings
 #define HL_Pin 0
 #define PTT_Pin 1 
-#define PD_Pin 2  
+#define PD_Pin 2
 
+// DS3231 Settings
+RTC_DS3231 rtc;
+
+// Misc Variables
+unsigned long previousMillis = 0;
+
+/****************************************************************************** 
+ * Standard Setup Function
+ ******************************************************************************/
 void setup() 
 {
   // Set pins
@@ -400,7 +415,11 @@ void setup()
   
   // Start Serial for debugging
   Serial.begin(115200); // Serial for ESP32-S2 board
-  Serial1.begin(9600, SERIAL_8N1, 7, 8); // Serial for SA818 using pins GPIO7 & GPIO8
+  Serial1.begin(9600, SERIAL_8N1, 6, 7); // Serial for SA818 using pins GPIO7 & GPIO8
+  delay(1000);
+
+  // Start the I2C interface
+  Wire.begin();
   
   // Start NeoPixel and set it to off
   NeoPixel.setBrightness(1); // 1-255
@@ -409,7 +428,7 @@ void setup()
   
   // Start Wifi and put in AP mode
   WiFi.softAPConfig(local_IP, gateway, subnet);
-  WiFi.softAP(ssid, password, channel);
+  WiFi.softAP(wifi_ssid, wifi_password, wifi_channel);
 
   // Start mDNS to allow yafb.local to work
   if (!MDNS.begin("yafb")) 
@@ -426,9 +445,11 @@ void setup()
     request->send_P(200, "text/html", index_html, processor);
   });
 
-
   server.on("/get", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
+    
+    // Need to fix since we moved everything to seperate forms
+    // if another form is submitted, the else fires
     if (request->hasParam("webonoff")) 
     {
       onoff = request->getParam("webonoff")->value();
@@ -450,6 +471,7 @@ void setup()
       temp.toCharArray(callsign, stringlength);
       Serial.print("webcallsign value: ");
       Serial.println(callsign);
+      createAndStoreMorse(callsign);
     }
     
     if (request->hasParam("webtxfrequency")) 
@@ -487,88 +509,184 @@ void setup()
       Serial.println(squelch);
     }
 
-    if (request->hasParam("webcurrentdate")) 
+    if (request->hasParam("webcurrentdate") && request->hasParam("webcurrenttime"))
     {
-      String temp = request->getParam("webcurrentdate")->value();
-      Serial.print("webcurrentdate value: ");
-      Serial.println(temp);
-      strptime(temp.c_str(), "%Y-%m-%d", &tmcurrenttime);
+      String tempdate = request->getParam("webcurrentdate")->value();
+      String temptime = request->getParam("webcurrenttime")->value();
+
+      strptime(tempdate.c_str(), "%Y-%m-%d", &tmcurrenttime);
+      strptime(temptime.c_str(), "%H:%M", &tmcurrenttime);
+
+      time_t allthoseseconds = mktime(&tmcurrenttime);
+      struct timeval tv{ .tv_sec = allthoseseconds };
+      settimeofday(&tv, NULL);
+
+      Serial.print("webcurrentdate/time value: ");
+      Serial.print(tempdate);
+      Serial.print(" ");
+      Serial.println(temptime);
     }
 
-    if (request->hasParam("webcurrenttime")) 
+    if (request->hasParam("webstartdate") && request->hasParam("webstarttime")) 
     {
-      String temp = request->getParam("webcurrenttime")->value();
-      Serial.print("webcurrenttime value: ");
-      Serial.println(temp);
-      strptime(temp.c_str(), "%H:%M", &tmcurrenttime);
-    }
-    
-    if (request->hasParam("webstartdate")) 
-    {
-      String temp = request->getParam("webstartdate")->value();
-      Serial.print("webstartdate value: ");
-      Serial.println(temp);
-      strptime(temp.c_str(), "%Y-%m-%d", &tmstarttime);
-    }
-    
-    if (request->hasParam("webstarttime")) 
-    {
-      String temp = request->getParam("webstarttime")->value();
-      Serial.print("webstarttime value: ");
-      Serial.println(temp);
-      strptime(temp.c_str(), "%H:%M", &tmstarttime);
-    }
-    
-    if (request->hasParam("webenddate")) 
-    {
-      String temp = request->getParam("webenddate")->value();
-      Serial.print("webenddate value: ");
-      Serial.println(temp);
-      strptime(temp.c_str(), "%Y-%m-%d", &tmendtime);
-    }
-    
-    if (request->hasParam("webendtime")) 
-    {
-      String temp = request->getParam("webendtime")->value();
-      Serial.print("webendtime value: ");
-      Serial.println(temp);
-      strptime(temp.c_str(), "%H:%M", &tmendtime);
-    }
-    
-    time_t temp[30];
-    strftime(temp, 30, "%H, %M, %S, %d, %m, %Y", &tmcurrenttime);
-    Serial.print("test: ");
-    Serial.println(temp);
-    setTime(temp);
+      String tempdate = request->getParam("webstartdate")->value();
+      String temptime = request->getParam("webstarttime")->value();
+      
+      strptime(tempdate.c_str(), "%Y-%m-%d", &tmstarttime);
+      strptime(temptime.c_str(), "%H:%M", &tmstarttime);
 
-       
-    request->send(200, "text/html", "HTTP GET request sent to your ESP on input field <br><a href=\"/\">Return to Home Page</a>");
+      Serial.print("webstartdate/time value: ");
+      Serial.print(tempdate);
+      Serial.print(" ");
+      Serial.println(temptime);
+    }
+    
+    if (request->hasParam("webenddate") && request->hasParam("webendtime")) 
+    {
+      String tempdate = request->getParam("webenddate")->value();
+      String temptime = request->getParam("webendtime")->value();
+      
+      strptime(tempdate.c_str(), "%Y-%m-%d", &tmendtime);
+      strptime(temptime.c_str(), "%H:%M", &tmendtime);
+      
+      Serial.print("webenddate/time value: ");
+      Serial.print(tempdate);
+      Serial.print(" ");
+      Serial.println(temptime);
+    }
+
+    request->send(200, "text/html", "<meta http-equiv=\"refresh\" content=\"0; URL=/\" />");
   });
   
   server.onNotFound(notFound);
   server.begin();
   MDNS.addService("http", "tcp", 80);
+
+  // Set RTC time if needed
+  if (! rtc.begin()) {
+    Serial.println("Couldn't find RTC");
+  }
+
+  // If power was lost, set it to the compiled date & time. About 30-40sec slow?
+  if (rtc.lostPower()) {
+    Serial.println("RTC lost power, let's set the time!");
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); 
+  }
+
+  updateSysTime();
+  
+  playMelody();
 }
 
+/****************************************************************************** 
+ * Standard Loop Function
+ * 
+ * Periodically update the ESP32 time from the RTC
+ * Play the audio melody then play the identification in morse code then wait
+ ******************************************************************************/
 void loop()
 {
-  delay(1000);
-  printLocalTime();
+  // Runs updateSysTime() every 10 minutes to keep the ESP32 in sync with the RTC in case of drift
+  unsigned long currentMillis = millis();
+  if(currentMillis - previousMillis >= 600000)
+  {
+    previousMillis = currentMillis;   
+    updateSysTime();  
+  }
+
+  // Start Transmittion
+  playMorse();
+  // End Transmittion
+
+  // Delay Between Transmittions
 }
 
-// This function sets the NeoPixel to the RGB value given
+/****************************************************************************** 
+ * External Display Functions
+ * 
+ * NeoPixelSet
+ *    Changes the Neo Pixel's RGB value
+ ******************************************************************************/
 void NeoPixelSet(uint32_t R, uint32_t G, uint32_t B)
 {
     NeoPixel.setPixelColor(0, R, G, B); // 0 is for the first NeoPixel
     NeoPixel.show();
 }
 
-/*
- * These functions are for the SA818
- */
+/****************************************************************************** 
+ * Misc Time Functions
+ * 
+ * printTimes
+ *    Outputs various times: System time, Unix time, RTC time
+ * 
+ * updateSysTime
+ *    Updates the ESP32 sytem time using the external RTC
+ ******************************************************************************/
 
-// send connnect command to SA818 
-void SA818connect(void)
+void printTimes()
+{
+  if(!getLocalTime(&tmcurrenttime)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+  Serial.print("Systime: ");
+  Serial.println(&tmcurrenttime, "%B %d %Y %H:%M:%S");
+  //  Serial.print("Starttime: ");
+  //  Serial.println(&tmstarttime, "%B %d %Y %H:%M:%S");
+  //  Serial.print("Endtime: ");
+  //  Serial.println(&tmendtime, "%B %d %Y %H:%M:%S");
+
+  DateTime now = rtc.now();
+  //  Serial.print("Unix: ");
+  //  Serial.println(now.unixtime());
+  
+  Serial.print("RTC: ");    
+  Serial.print(now.year(), DEC);
+  Serial.print('/');
+  Serial.print(now.month(), DEC);
+  Serial.print('/');
+  Serial.print(now.day(), DEC);
+  Serial.print(" (");
+  Serial.print(now.hour(), DEC);
+  Serial.print(':');
+  Serial.print(now.minute(), DEC);
+  Serial.print(':');
+  Serial.print(now.second(), DEC);
+  Serial.print(")");
+  Serial.println();
+  Serial.println();
+  
+}
+
+void updateSysTime()
+{  
+  // Update the system time from RTC time
+  DateTime now = rtc.now();
+  struct timeval tv{ .tv_sec = now.unixtime() };
+  settimeofday(&tv, NULL);
+  Serial.println("Updating the System Time.");
+}
+
+/****************************************************************************** 
+ * These functions are for the SA818
+ * 
+ * SA818Connect
+ *    Used for initial handshake with the SA818
+ * 
+ * SA818SetGroup
+ *    Sets the Bandwidth, TX Frequency, RX Frequency, CTCSS tones, and Squelch
+ * 
+ * SA818SetVolume 
+ *    Sets the output volume of the SA818
+ * 
+ * SA818SetFilter
+ *    Sets the filters of the SA818
+ * 
+ * SA818SetTail
+ *    Sets what kind of tail you want after tx
+ ******************************************************************************/
+ 
+void SA818Connect(void)
 {
   char rxbuffer[20];  // buffer for response string
   byte rxlen=0;   // counter for received bytes
@@ -582,8 +700,7 @@ void SA818connect(void)
   delay(1000);    // wait a little bit
 }
 
-// set txfrequency, rxfrequency, txctcss, rxctcss, bandwidth, squelch to SA818
-void SA818setgroup(byte bw, float txfrequency, float rxfrequency, byte txctcss, byte squelch, byte rxctcss)
+void SA818SetGroup(byte bw, float txfrequency, float rxfrequency, byte txctcss, byte squelch, byte rxctcss)
 {
   Serial1.print("AT+DMOSETGROUP=");
   Serial1.print(bw);
@@ -600,15 +717,13 @@ void SA818setgroup(byte bw, float txfrequency, float rxfrequency, byte txctcss, 
   if(rxctcss<10) Serial1.print("0");
 }
 
-// set volume to SA818
-void SA818setvolume(byte volume)
+void SA818SetVolume(byte volume)
 {
   Serial1.print("AT+DMOSETVOLUME=");
   Serial1.println(volume);
 }
 
-// set filters to SA818
-void SA818setfilter(byte prefilter, byte highpassfilter, byte lowpassfilter)
+void SA818SetFilter(byte prefilter, byte highpassfilter, byte lowpassfilter)
 {
   Serial1.print("AT+SETFILTER=");
   Serial1.print(prefilter);
@@ -618,8 +733,7 @@ void SA818setfilter(byte prefilter, byte highpassfilter, byte lowpassfilter)
   Serial1.println(lowpassfilter);
 }
 
-// set tail to SA818
-void SA818settail(byte tailtone)
+void SA818SetTail(byte tailtone)
 {
   Serial1.print("AT+SETTAIL=");
   Serial1.println(tailtone);
