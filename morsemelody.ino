@@ -131,8 +131,8 @@ int ledc_resolution = 8;
  * playMorse
  *    Plays 'callsign' in morse code
  *    
- * createAndStoreMorse
- *    Converts 'callsign' into a morse code language
+ * createMorse
+ *    Converts 'callmessage' into a morse code language
  ******************************************************************************/
  
  /****************************************************************************** 
@@ -168,9 +168,15 @@ void playMelody()
   int melody[] = 
   {
     //Based on the arrangement at https://www.flutetunes.com/tunes.php?id=192
-    NOTE_E5, 4,  NOTE_B4, 8,  NOTE_C5, 8,  NOTE_D5, 4,  NOTE_C5, 8,  NOTE_B4, 8,
-    NOTE_A4, 4,  NOTE_A4, 8,  NOTE_C5, 8,  NOTE_E5, 4,  NOTE_D5, 8,  NOTE_C5, 8,
-    NOTE_B4, -4,  NOTE_C5, 8,  NOTE_D5, 4,  NOTE_E5, 4,
+    NOTE_E5, 4,  NOTE_B4,8,  NOTE_C5,8,  NOTE_D5,4,  NOTE_C5,8,  NOTE_B4,8,
+    NOTE_A4, 4,  NOTE_A4,8,  NOTE_C5,8,  NOTE_E5,4,  NOTE_D5,8,  NOTE_C5,8,
+    NOTE_B4, -4,  NOTE_C5,8,  NOTE_D5,4,  NOTE_E5,4,
+    NOTE_C5, 4,  NOTE_A4,4,  NOTE_A4,8,  NOTE_A4,4,  NOTE_B4,8,  NOTE_C5,8,
+  
+    NOTE_D5, -4,  NOTE_F5,8,  NOTE_A5,4,  NOTE_G5,8,  NOTE_F5,8,
+    NOTE_E5, -4,  NOTE_C5,8,  NOTE_E5,4,  NOTE_D5,8,  NOTE_C5,8,
+    NOTE_B4, 4,  NOTE_B4,8,  NOTE_C5,8,  NOTE_D5,4,  NOTE_E5,4,
+    NOTE_C5, 4,  NOTE_A4,4,  NOTE_A4,4, 
   };
   
   // sizeof gives the number of bytes, each int value is composed of two bytes (16 bits)
@@ -185,6 +191,7 @@ void playMelody()
   ledcSetup(ledc_channel, ledc_freq, ledc_resolution);
   ledcAttachPin(Sound_Pin, ledc_channel);
 
+  Serial.println("Playing melody start");
   // Iterate over the notes of the melody.
   // Remember, the array is twice the number of notes (notes + durations)
   for (int thisNote = 0; thisNote < notes * 2; thisNote = thisNote + 2) 
@@ -208,15 +215,18 @@ void playMelody()
     ledcWriteTone(ledc_channel, 0);
     delay(noteDuration * 0.1);
   }
-  
+  Serial.println("Playing melody end");
   ledcDetachPin(Sound_Pin);
 }
 
 /****************************************************************************** 
- * Morse Playing Function
+ * Morse Generating Function
+ * 
+ *  Input: Yet Another Foxbox
+ *  Output: -.-- . - / .- -. --- - .... . .-. / ..-. --- -..- -... --- -..-
  ******************************************************************************/
 
-void createAndStoreMorse(String convertmorsemessage)
+String createMorse(String toconvert)
 {
   struct dict
   {
@@ -281,26 +291,28 @@ void createAndStoreMorse(String convertmorsemessage)
     { '$', "...-..-" },
     { '@', ".--.-." },
   };
+  
+  morse = "";
+  toconvert.toLowerCase();
 
-  convertmorsemessage.toLowerCase();
-
-  for (int messagei = 0; messagei < convertmorsemessage.length(); messagei++)
+  for (int messagei = 0; messagei < toconvert.length(); messagei++)
   {
     for (int structi = 0; structi < sizeof(morseLookup)/sizeof(dict); structi++)
     {
-      if (isSpace(convertmorsemessage.charAt(messagei)))
+      if (isSpace(toconvert.charAt(messagei)))
       {
-        convertedmessage.concat("/ ");
+        morse.concat("/ ");
         break;
       }
-      else if (convertmorsemessage.charAt(messagei) == morseLookup[structi].character)
+      else if (toconvert.charAt(messagei) == morseLookup[structi].character)
       {
-        convertedmessage.concat(morseLookup[structi].morse);
-        convertedmessage.concat(" ");
+        morse.concat(morseLookup[structi].morse);
+        morse.concat(" ");
       }
     }
   }
-  Serial.println(convertedmessage);
+
+  return morse;
 }
 
 
@@ -328,10 +340,10 @@ void playMorse()
 
   // convertedmessage
   Serial.println("Playing morse start");
-  for (int i = 0; i < convertedmessage.length(); i++)
+  for (int i = 0; i < morse.length(); i++)
   {
     // only have . - / SPACE
-    switch (convertedmessage.charAt(i))
+    switch (morse.charAt(i))
     {
       case '.':
         ledcWriteTone(ledc_channel, morsetone * 80);
