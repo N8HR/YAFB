@@ -1,3 +1,4 @@
+
 /*
  *   This file is part of Yet Another Foxbox (YAFB).
  *   
@@ -27,33 +28,46 @@
 #include <WiFiClient.h>         // For WiFi
 #include <AsyncTCP.h>           // For Webserver
 #include <ESPAsyncWebServer.h>  // For Webserver
+#include <Preferences.h>        // For storing variables that survive a reset
 #include <ESPmDNS.h>            // For DNS resolving
 #include "RTClib.h"             // For DS3231 RTC Module
 #include <Wire.h>               // For I2C Communication (DS3231)
 
-// Initial Fox Settings if nothing set
-char callsign[15] = "N0CALL";
-String convertedmessage;
+// Preferences Settings
+Preferences preferences;
+
+// Declare some initial variables
+//  This is needed due to AsyncWebServer needing them before we can pull them from memory
+//  So we decalre these and change them in setup via preferences
+String callmessage = "N0CALL Fox";
+String morse = "-. ----- -.-. .- .-.. .-.. / ..-. --- -..-";
 int timebetween = 60000; // Time between transmissions in miliseconds (1 sec = 1000 miliseconds)
 boolean onoff = false; // false = off, true = on
 struct tm tmcurrenttime = {0};
 struct tm tmstarttime = {0};
 struct tm tmendtime = {0};
-
-// Initial SA818 Settings if nothing set
 float txfrequency = 146.565; // 146.565 is the normal TX frequency for foxes
 float rxfrequency = 146.565; // RX frequency
 byte bandwidth = 1; // Bandwidth, 0=12.5k, 1=25K
 byte squelch = 1; // Squelch 0-8, 0 is listen/open
 byte volume = 5; // Volume 1-8
 
-// WiFi Settings
-const char* wifi_ssid = "YAFB";
-const char* wifi_password = "11111111";
-const uint8_t wifi_channel = 11;
-IPAddress local_IP(10,73,73,73);
-IPAddress gateway(10,73,73,1);
-IPAddress subnet(255,255,255,0);
+// NeoPixel Settings
+#define NeoPixel_PIN 18
+Adafruit_NeoPixel NeoPixel(1, NeoPixel_PIN, NEO_GRB + NEO_KHZ800);
+
+// ESP32-S2 Settings
+#define HL_Pin 0
+#define PTT_Pin 1 
+#define PD_Pin 2
+
+// DS3231 Settings
+RTC_DS3231 rtc;
+
+// Misc Variables
+unsigned long oneminmillis = 10000000;
+unsigned long tenminmillis = 1000000;
+unsigned long radiomillis = 1000000;
 
 // Web Server Settings
 AsyncWebServer server(80);
@@ -207,14 +221,14 @@ const char index_html[] PROGMEM = R"rawliteral(
   </form>
   <form action="/get">
   <div class="container">
-    <div><label class="textlabel" for="callsign">Callsign:</label></div>
-    <div class="spantwo"><input type="text" id="callsign" name="webcallsign" value=~CALLSIGN~></div>
+    <div><label class="textlabel" for="callmessage">Callsign:</label></div>
+    <div class="spantwo"><input type="text" id="callmessage" name="webcallmessage" value="~CALLMESSAGE~"></div>
   
     <div><label class="textlabel" for="txfrequency">TX Frequency:</label></div>
-    <div class="spantwo"><input type="text" id="txfrequency" name="webtxfrequency" value=~TXFREQUENCY~></div>
+    <div class="spantwo"><input type="text" id="txfrequency" name="webtxfrequency" value="~TXFREQUENCY~"></div>
   
     <div><label class="textlabel" for="rxfrequency">RX Frequency:</label></div>
-    <div class="spantwo"><input type="text" id="rxfrequency" name="webrxfrequency" value=~RXFREQUENCY~></div>
+    <div class="spantwo"><input type="text" id="rxfrequency" name="webrxfrequency" value="~RXFREQUENCY~"></div>
   
     <div><label for="bandwidth">Bandwidth:</label></div>
     <div class="spantwo"><select id="bandwidth" name="webbandwidth">~BANDWIDTH~</select></div>
@@ -231,16 +245,16 @@ const char index_html[] PROGMEM = R"rawliteral(
   <form action="/get">
   <div class="container">
     <div><label for="currenttime">Current time:</label></div>
-    <div><input type="date" id="currentdate" name="webcurrentdate" value=~CURRENTDATE~></div>
-    <div><input type="time" id="currenttime" name="webcurrenttime" value=~CURRENTTIME~></div>
+    <div><input type="date" id="currentdate" name="webcurrentdate" value="~CURRENTDATE~"></div>
+    <div><input type="time" id="currenttime" name="webcurrenttime" value="~CURRENTTIME~"></div>
   
     <div><label for="starttime">Start fox at:</label></div>
-    <div><input type="date" id="startdate" name="webstartdate" value=~STARTDATE~></div>
-    <div><input type="time" id="starttime" name="webstarttime" value=~STARTTIME~></div>
+    <div><input type="date" id="startdate" name="webstartdate" value="~STARTDATE~"></div>
+    <div><input type="time" id="starttime" name="webstarttime" value="~STARTTIME~"></div>
   
     <div><label for="stoptime">Stop fox at:</label></div>
-    <div><input type="date" id="stopdate" name="webenddate" value=~ENDDATE~></div>
-    <div><input type="time" id="stoptime" name="webendtime" value=~ENDTIME~></div>
+    <div><input type="date" id="stopdate" name="webenddate" value="~ENDDATE~"></div>
+    <div><input type="time" id="stoptime" name="webendtime" value="~ENDTIME~"></div>
   
     <div><input type="reset"></div>
     <div><input type="submit" value="Submit"></div>
@@ -261,9 +275,9 @@ String processor(const String& var)
     }
   }
   
-  if(var == "CALLSIGN")
+  if(var == "CALLMESSAGE")
   {
-      return callsign;  
+      return String(callmessage);  
   }
   
   if(var == "TXFREQUENCY")
@@ -385,26 +399,45 @@ void notFound(AsyncWebServerRequest *request)
   request->send(404, "text/plain", "Not found");
 }
 
-// NeoPixel Settings
-#define NeoPixel_PIN 18
-Adafruit_NeoPixel NeoPixel(1, NeoPixel_PIN, NEO_GRB + NEO_KHZ800);
-
-// ESP32-S2 Settings
-#define HL_Pin 0
-#define PTT_Pin 1 
-#define PD_Pin 2
-
-// DS3231 Settings
-RTC_DS3231 rtc;
-
-// Misc Variables
-unsigned long previousMillis = 0;
-
 /****************************************************************************** 
  * Standard Setup Function
  ******************************************************************************/
 void setup() 
 {
+  // Start Serial for debugging
+  Serial.begin(115200); // Serial for ESP32-S2 board
+  Serial1.begin(9600, SERIAL_8N1, 6, 7); // Serial for SA818 using pins GPIO7 & GPIO8
+  delay(1000);
+    
+  // Replace fox settings from memory
+  preferences.begin("settings", false);
+    timebetween = preferences.getInt("timebetween", 60000);
+    onoff = preferences.getBool("onoff", false);
+    txfrequency = preferences.getFloat("txfrequency", 146.565);
+    rxfrequency = preferences.getFloat("rxfrequency", 146.565);
+    bandwidth = preferences.getChar("bandwidth", 1);
+    squelch = preferences.getChar("squelch", 1);
+    volume = preferences.getChar("volume", 5);
+    
+    time_t starttemp = preferences.getULong("starttime", 1609459200);
+    localtime_r(&starttemp, &tmstarttime);
+    
+    time_t endtemp = preferences.getULong("endtime", 1609459200);
+    localtime_r(&endtemp, &tmendtime);
+
+    callmessage = preferences.getString("callmessage", "N0CALL Fox");
+    morse = preferences.getString("morse", "-. ----- -.-. .- .-.. .-.. / ..-. --- -..-");
+  preferences.end();
+
+  // WiFi Settings
+  const char* wifi_ssid = "YAFB";
+  const char* wifi_password = "11111111";
+  const uint8_t wifi_channel = 11;
+  IPAddress local_IP(10,73,73,73);
+  IPAddress gateway(10,73,73,1);
+  IPAddress subnet(255,255,255,0);
+
+  
   // Set pins
   pinMode(PTT_Pin, OUTPUT);
   pinMode(PD_Pin, OUTPUT);
@@ -413,11 +446,6 @@ void setup()
   digitalWrite(PD_Pin, LOW); // LOW for power down mode, HIGH for normal mode??
   digitalWrite(HL_Pin, LOW); // LOW for .5w, HIGH for 1w??
   
-  // Start Serial for debugging
-  Serial.begin(115200); // Serial for ESP32-S2 board
-  Serial1.begin(9600, SERIAL_8N1, 6, 7); // Serial for SA818 using pins GPIO7 & GPIO8
-  delay(1000);
-
   // Start the I2C interface
   Wire.begin();
   
@@ -447,12 +475,14 @@ void setup()
 
   server.on("/get", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
+    preferences.begin("settings", false);
     
     // Need to fix since we moved everything to seperate forms
     // if another form is submitted, the else fires
     if (request->hasParam("webonoff")) 
     {
       onoff = request->getParam("webonoff")->value();
+      preferences.putBool("onoff", onoff);
       Serial.print("onoff value: ");
       Serial.println(onoff);
     }
@@ -463,20 +493,23 @@ void setup()
       Serial.println(onoff);
     }
     
-    if (request->hasParam("webcallsign")) 
+    if (request->hasParam("webcallmessage")) 
     {
-      String temp;
-      temp = request->getParam("webcallsign")->value();
-      int stringlength = temp.length() + 1;
-      temp.toCharArray(callsign, stringlength);
-      Serial.print("webcallsign value: ");
-      Serial.println(callsign);
-      createAndStoreMorse(callsign);
+      callmessage = request->getParam("webcallmessage")->value();
+      preferences.putString("callmessage", callmessage);
+      Serial.print("webcallmessage value: ");
+      Serial.println(callmessage);
+      
+      morse = createMorse(callmessage);
+      preferences.putString("morse", morse);
+      Serial.print("morse: ");
+      Serial.println(morse);
     }
     
     if (request->hasParam("webtxfrequency")) 
     {
       txfrequency = (request->getParam("webtxfrequency")->value()).toFloat();
+      preferences.putFloat("txfrequency", txfrequency);
       Serial.print("webtxfrequency value: ");
       Serial.println(txfrequency, 3);
     }
@@ -484,6 +517,7 @@ void setup()
     if (request->hasParam("webrxfrequency")) 
     {
       rxfrequency = (request->getParam("webrxfrequency")->value()).toFloat();
+      preferences.putFloat("rxfrequency", rxfrequency);
       Serial.print("webrxfrequency value: ");
       Serial.println(rxfrequency, 3);
     }
@@ -491,6 +525,7 @@ void setup()
     if (request->hasParam("webbandwidth")) 
     {
       bandwidth = (request->getParam("webbandwidth")->value()).toInt();
+      preferences.putChar("bandwidth", bandwidth);
       Serial.print("webbandwidth value: ");
       Serial.println(bandwidth);
     }
@@ -498,6 +533,7 @@ void setup()
     if (request->hasParam("webvolume")) 
     {
       volume = (request->getParam("webvolume")->value()).toInt();
+      preferences.putChar("volume", volume);
       Serial.print("webvolume value: ");
       Serial.println(volume);
     }
@@ -505,6 +541,7 @@ void setup()
     if (request->hasParam("websquelch")) 
     {
       squelch = (request->getParam("websquelch")->value()).toInt();
+      preferences.putChar("squelch", squelch);
       Serial.print("websquelch value: ");
       Serial.println(squelch);
     }
@@ -535,6 +572,9 @@ void setup()
       strptime(tempdate.c_str(), "%Y-%m-%d", &tmstarttime);
       strptime(temptime.c_str(), "%H:%M", &tmstarttime);
 
+      time_t temp = mktime(&tmstarttime);
+      preferences.putULong("starttime", temp);
+
       Serial.print("webstartdate/time value: ");
       Serial.print(tempdate);
       Serial.print(" ");
@@ -548,13 +588,18 @@ void setup()
       
       strptime(tempdate.c_str(), "%Y-%m-%d", &tmendtime);
       strptime(temptime.c_str(), "%H:%M", &tmendtime);
+
+      time_t temp = mktime(&tmendtime);
+      preferences.putULong("endtime", temp);
       
       Serial.print("webenddate/time value: ");
       Serial.print(tempdate);
       Serial.print(" ");
       Serial.println(temptime);
     }
-
+    
+    preferences.end();
+    
     request->send(200, "text/html", "<meta http-equiv=\"refresh\" content=\"0; URL=/\" />");
   });
   
@@ -572,10 +617,8 @@ void setup()
     Serial.println("RTC lost power, let's set the time!");
     rtc.adjust(DateTime(F(__DATE__), F(__TIME__))); 
   }
-
-  updateSysTime();
   
-  playMelody();
+  updateSysTime();
 }
 
 /****************************************************************************** 
@@ -586,19 +629,26 @@ void setup()
  ******************************************************************************/
 void loop()
 {
-  // Runs updateSysTime() every 10 minutes to keep the ESP32 in sync with the RTC in case of drift
+ // Runs updateSysTime() every 10 minutes to keep the ESP32 in sync with the RTC in case of drift
   unsigned long currentMillis = millis();
-  if(currentMillis - previousMillis >= 600000)
+  if(currentMillis - tenminmillis >= 600000)
   {
-    previousMillis = currentMillis;   
-    updateSysTime();  
+    tenminmillis = currentMillis;   
+    updateSysTime();
   }
 
-  // Start Transmittion
-  playMorse();
-  // End Transmittion
+  currentMillis = millis();
+  if(currentMillis - radiomillis >= timebetween)
+  {
+    // Start Transmittion
+    playMelody();
+    delay(700);
+    playMorse();
+    // End Transmittion
 
-  // Delay Between Transmittions
+    radiomillis = millis();
+  }
+
 }
 
 /****************************************************************************** 
@@ -616,47 +666,9 @@ void NeoPixelSet(uint32_t R, uint32_t G, uint32_t B)
 /****************************************************************************** 
  * Misc Time Functions
  * 
- * printTimes
- *    Outputs various times: System time, Unix time, RTC time
- * 
  * updateSysTime
  *    Updates the ESP32 sytem time using the external RTC
  ******************************************************************************/
-
-void printTimes()
-{
-  if(!getLocalTime(&tmcurrenttime)){
-    Serial.println("Failed to obtain time");
-    return;
-  }
-  Serial.print("Systime: ");
-  Serial.println(&tmcurrenttime, "%B %d %Y %H:%M:%S");
-  //  Serial.print("Starttime: ");
-  //  Serial.println(&tmstarttime, "%B %d %Y %H:%M:%S");
-  //  Serial.print("Endtime: ");
-  //  Serial.println(&tmendtime, "%B %d %Y %H:%M:%S");
-
-  DateTime now = rtc.now();
-  //  Serial.print("Unix: ");
-  //  Serial.println(now.unixtime());
-  
-  Serial.print("RTC: ");    
-  Serial.print(now.year(), DEC);
-  Serial.print('/');
-  Serial.print(now.month(), DEC);
-  Serial.print('/');
-  Serial.print(now.day(), DEC);
-  Serial.print(" (");
-  Serial.print(now.hour(), DEC);
-  Serial.print(':');
-  Serial.print(now.minute(), DEC);
-  Serial.print(':');
-  Serial.print(now.second(), DEC);
-  Serial.print(")");
-  Serial.println();
-  Serial.println();
-  
-}
 
 void updateSysTime()
 {  
@@ -664,7 +676,14 @@ void updateSysTime()
   DateTime now = rtc.now();
   struct timeval tv{ .tv_sec = now.unixtime() };
   settimeofday(&tv, NULL);
-  Serial.println("Updating the System Time.");
+  getLocalTime(&tmcurrenttime);
+  
+  Serial.println("***updateSysTime**************************************************************");
+  Serial.println("Synced the ESP32 time from the RTC time.");
+  Serial.print("\tCurrent time: ");
+  Serial.println(&tmcurrenttime, "%B %d %Y %H:%M:%S");
+  Serial.println("******************************************************************************");
+  Serial.println();
 }
 
 /****************************************************************************** 
@@ -737,4 +756,70 @@ void SA818SetTail(byte tailtone)
 {
   Serial1.print("AT+SETTAIL=");
   Serial1.println(tailtone);
+}
+
+/****************************************************************************** 
+ * These functions are for debugging
+ * 
+ * printVars
+ *    Prints out the variables and their values
+ *    
+ * printTimes
+ *    Outputs various times: System time, Unix time, RTC time   
+ ******************************************************************************/
+
+
+void printVars()
+{
+  Serial.println("***printVars******************************************************************");
+  Serial.print("Call: ");
+  Serial.println(callmessage);
+  Serial.print("Morse: ");
+  Serial.println(morse);
+  Serial.print("Time Between: ");
+  Serial.println(timebetween);
+  Serial.print("OnOff: ");
+  Serial.println(onoff);
+  Serial.print("TX: ");
+  Serial.println(txfrequency, 3);
+  Serial.print("RX: ");
+  Serial.println(rxfrequency, 3);
+  Serial.print("Bandwidth: ");
+  Serial.println(bandwidth);
+  Serial.print("Squelch: ");
+  Serial.println(squelch);
+  Serial.print("Volume: ");
+  Serial.println(volume);
+  Serial.print("Start: ");
+  Serial.println(&tmstarttime, "%B %d %Y %H:%M:%S");
+  Serial.print("End: ");
+  Serial.println(&tmendtime, "%B %d %Y %H:%M:%S");
+  Serial.println("******************************************************************************");
+  Serial.println();
+}
+
+void printTimes()
+{
+  Serial.println("***printTimes*****************************************************************");
+
+  if(!getLocalTime(&tmcurrenttime)){
+    Serial.println("Failed to obtain time");
+    return;
+  }
+
+  Serial.print("Systime: ");
+  Serial.println(&tmcurrenttime, "%B %d %Y %H:%M:%S");
+  //  Serial.print("Starttime: ");
+  //  Serial.println(&tmstarttime, "%B %d %Y %H:%M:%S");
+  //  Serial.print("Endtime: ");
+  //  Serial.println(&tmendtime, "%B %d %Y %H:%M:%S");
+
+  DateTime now = rtc.now();
+  //  Serial.print("Unix: ");
+  //  Serial.println(now.unixtime());
+  
+  Serial.print("RTC: ");    
+  Serial.printf("%02d/%02d/%04d (%02d:%02d:%02d)\n", now.month(), now.day(), now.year(), now.hour(), now.minute(), now.second());
+  Serial.println("******************************************************************************");
+  Serial.println();
 }
