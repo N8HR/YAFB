@@ -1,4 +1,3 @@
-
 /*
  *   This file is part of Yet Another Foxbox (YAFB).
  *   
@@ -22,6 +21,21 @@
  *   
  */
 
+
+/****************************************************************************** 
+ *   Todo:
+ *   
+ *   Website
+ *    * sanitize inputs
+ *   SA818
+ *    * Add queue so it doesn't cut the transmission
+ *   General
+ *    * Clean up code
+ *    * More documentation
+ *    * Nicer serial outputs
+ ******************************************************************************/
+
+
 #include <Adafruit_NeoPixel.h>  // Used for the NeoPixel LED on GPIO 18
 #include <WiFi.h>               // For Wifi
 #include <WiFiAP.h>             // For WiFi
@@ -38,10 +52,10 @@ Preferences preferences;
 
 // Declare some initial variables
 //  This is needed due to AsyncWebServer needing them before we can pull them from memory
-//  So we decalre these and change them in setup via preferences
+//  So we declare these and change them in setup via preferences if set
 String callmessage = "N0CALL Fox";
 String morse = "-. ----- -.-. .- .-.. .-.. / ..-. --- -..-";
-int timebetween = 60000; // Time between transmissions in miliseconds (1 sec = 1000 miliseconds)
+int timebetween = 57000; // Time between transmissions in miliseconds (1 sec = 1000 miliseconds)
 boolean onoff = false; // false = off, true = on
 struct tm tmcurrenttime = {0};
 struct tm tmstarttime = {0};
@@ -68,6 +82,7 @@ RTC_DS3231 rtc;
 unsigned long oneminmillis = 10000000;
 unsigned long tenminmillis = 1000000;
 unsigned long radiomillis = 1000000;
+unsigned long tempmillis = 1000000;
 
 // Web Server Settings
 AsyncWebServer server(80);
@@ -210,7 +225,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   </head>
   <body>
   
-  <form action="/get">
+  <form action="/gettransmitter">
   <div class="container">
     <div class="titlebox"><h2>Yet Another Foxbox</h2></div>
     <div>Transmitter:</div>
@@ -219,35 +234,44 @@ const char index_html[] PROGMEM = R"rawliteral(
     <div><input type="submit" value="Submit"></div>
   </div>
   </form>
-  <form action="/get">
+  <form action="/getfoxsettings">
   <div class="container">
     <div><label class="textlabel" for="callmessage">Callsign:</label></div>
     <div class="spantwo"><input type="text" id="callmessage" name="webcallmessage" value="~CALLMESSAGE~"></div>
   
     <div><label class="textlabel" for="txfrequency">TX Frequency:</label></div>
-    <div class="spantwo"><input type="text" id="txfrequency" name="webtxfrequency" value="~TXFREQUENCY~"></div>
+    <div class="spantwo"><input type="text" id="txfrequency" name="webtxfrequency" value="~TXFREQUENCY~" pattern="[0-9]{3}[.][0-9]{3}"></div>
   
     <div><label class="textlabel" for="rxfrequency">RX Frequency:</label></div>
-    <div class="spantwo"><input type="text" id="rxfrequency" name="webrxfrequency" value="~RXFREQUENCY~"></div>
+    <div class="spantwo"><input type="text" id="rxfrequency" name="webrxfrequency" value="~RXFREQUENCY~" pattern="[0-9]{3}[.][0-9]{3}"></div>
   
     <div><label for="bandwidth">Bandwidth:</label></div>
     <div class="spantwo"><select id="bandwidth" name="webbandwidth">~BANDWIDTH~</select></div>
   
     <div><label for="volume">Volume:</label></div>
     <div class="spantwo"><select id="volume" name="webvolume">~VOLUME~</select></div>
-  
+
+<!--This will be added when implemented
     <div><label for="squelch">Squelch:</label></div>
     <div class="spantwo"><select id="squelch" name ="websquelch">~SQUELCH~</select></div>
+-->
+
     <div><input type="reset"></div>
     <div><input type="submit" value="Submit"></div>
   </div>
   </form>
-  <form action="/get">
+  <form action="/getcurrenttime">
   <div class="container">
     <div><label for="currenttime">Current time:</label></div>
     <div><input type="date" id="currentdate" name="webcurrentdate" value="~CURRENTDATE~"></div>
     <div><input type="time" id="currenttime" name="webcurrenttime" value="~CURRENTTIME~"></div>
-  
+    
+    <div><input type="reset"></div>
+    <div><input type="submit" value="Submit"></div>
+  </div>
+  </form>
+  <form action="/getstartendtime">
+  <div class="container">
     <div><label for="starttime">Start fox at:</label></div>
     <div><input type="date" id="startdate" name="webstartdate" value="~STARTDATE~"></div>
     <div><input type="time" id="starttime" name="webstarttime" value="~STARTTIME~"></div>
@@ -351,6 +375,7 @@ String processor(const String& var)
 
   if (var == "CURRENTDATE")
   {
+    getLocalTime(&tmcurrenttime);
     char temp[20];
     strftime(temp, 20, "%Y-%m-%d", &tmcurrenttime);
     return temp;
@@ -358,6 +383,7 @@ String processor(const String& var)
 
   if (var == "CURRENTTIME")
   {
+    getLocalTime(&tmcurrenttime);
     char temp[20];
     strftime(temp, 20, "%H:%M", &tmcurrenttime);
     return temp;
@@ -399,6 +425,7 @@ void notFound(AsyncWebServerRequest *request)
   request->send(404, "text/plain", "Not found");
 }
 
+HardwareSerial SASerial(1);
 /****************************************************************************** 
  * Standard Setup Function
  ******************************************************************************/
@@ -406,11 +433,11 @@ void setup()
 {
   // Start Serial for debugging
   Serial.begin(115200); // Serial for ESP32-S2 board
-  Serial1.begin(9600, SERIAL_8N1, 6, 7); // Serial for SA818 using pins GPIO7 & GPIO8
+  SASerial.begin(9600, SERIAL_8N1, 6, 7); // Serial for SA818 using pins GPIO6 (rx) & GPIO7 (tx)
   delay(1000);
     
   // Replace fox settings from memory
-  preferences.begin("settings", false);
+  preferences.begin("settings", true);
     timebetween = preferences.getInt("timebetween", 60000);
     onoff = preferences.getBool("onoff", false);
     txfrequency = preferences.getFloat("txfrequency", 146.565);
@@ -442,7 +469,7 @@ void setup()
   pinMode(PTT_Pin, OUTPUT);
   pinMode(PD_Pin, OUTPUT);
   pinMode(HL_Pin, OUTPUT);
-  digitalWrite(PTT_Pin, HIGH); // LOW is RX, High is TX, it's confusing??
+  digitalWrite(PTT_Pin, LOW); // LOW is RX, High is TX, it's confusing??
   digitalWrite(PD_Pin, LOW); // LOW for power down mode, HIGH for normal mode??
   digitalWrite(HL_Pin, LOW); // LOW for .5w, HIGH for 1w??
   
@@ -473,12 +500,10 @@ void setup()
     request->send_P(200, "text/html", index_html, processor);
   });
 
-  server.on("/get", HTTP_GET, [] (AsyncWebServerRequest *request)
+  server.on("/gettransmitter", HTTP_GET, [] (AsyncWebServerRequest *request)
   {
     preferences.begin("settings", false);
     
-    // Need to fix since we moved everything to seperate forms
-    // if another form is submitted, the else fires
     if (request->hasParam("webonoff")) 
     {
       onoff = request->getParam("webonoff")->value();
@@ -492,7 +517,16 @@ void setup()
       Serial.print("onoff value: ");
       Serial.println(onoff);
     }
+
+    preferences.end();
     
+    request->send(200, "text/html", "<meta http-equiv=\"refresh\" content=\"0; URL=/\" />");
+  });
+
+  server.on("/getfoxsettings", HTTP_GET, [] (AsyncWebServerRequest *request)
+  {
+    preferences.begin("settings", false);
+
     if (request->hasParam("webcallmessage")) 
     {
       callmessage = request->getParam("webcallmessage")->value();
@@ -545,6 +579,17 @@ void setup()
       Serial.print("websquelch value: ");
       Serial.println(squelch);
     }
+    preferences.end();
+
+    SA818SetGroup();
+    SA818SetVolume();
+    
+    request->send(200, "text/html", "<meta http-equiv=\"refresh\" content=\"0; URL=/\" />");
+  });
+  
+  server.on("/getcurrenttime", HTTP_GET, [] (AsyncWebServerRequest *request)
+  {
+    preferences.begin("settings", false);
 
     if (request->hasParam("webcurrentdate") && request->hasParam("webcurrenttime"))
     {
@@ -563,7 +608,11 @@ void setup()
       Serial.print(" ");
       Serial.println(temptime);
     }
-
+  });
+  
+  server.on("/getstartendtime", HTTP_GET, [] (AsyncWebServerRequest *request)
+  {
+    preferences.begin("settings", false);
     if (request->hasParam("webstartdate") && request->hasParam("webstarttime")) 
     {
       String tempdate = request->getParam("webstartdate")->value();
@@ -629,7 +678,7 @@ void setup()
  ******************************************************************************/
 void loop()
 {
- // Runs updateSysTime() every 10 minutes to keep the ESP32 in sync with the RTC in case of drift
+// Runs updateSysTime() every 10 minutes to keep the ESP32 in sync with the RTC in case of drift
   unsigned long currentMillis = millis();
   if(currentMillis - tenminmillis >= 600000)
   {
@@ -637,16 +686,53 @@ void loop()
     updateSysTime();
   }
 
+  // Starts transmitting with a time gap of 'timebetween' && if 'onoff' is set to true
   currentMillis = millis();
-  if(currentMillis - radiomillis >= timebetween)
+  if(currentMillis - radiomillis >= timebetween && onoff)
   {
-    // Start Transmittion
-    playMelody();
-    delay(700);
-    playMorse();
-    // End Transmittion
+    digitalWrite(HL_Pin, HIGH); // HIGH for .5w, LOW for 1w??
 
+    // Set pins to be ready for transmit
+    digitalWrite(PD_Pin, HIGH); // Take the SA818 out of PD state
+    digitalWrite(PTT_Pin, HIGH); // Put the SA818 in TX mode
+    delay(3000);  // Takes about 3 seconds for SA818 to come out of PD state
+
+    NeoPixelSet(255, 0, 0);
+
+    // Play the song
+    playMelody();
+    delay(700); // Just a slight break between
+    // Play the ID in morse
+    playMorse();
+        
+
+    // Set pins to stop transmit and power down the SA818 for power saving
+    digitalWrite(PTT_Pin, LOW); // Put the SA818 in RX mode
+    digitalWrite(PD_Pin, LOW); // Put the SA818 back into PD state
+    // End Transmittion Block
+
+    NeoPixelSet(0, 0, 0);
+
+    // Set for gap between tranmissions
     radiomillis = millis();
+  }
+ 
+  currentMillis = millis();
+  if(currentMillis - tempmillis >= 10000)
+  {
+    String content = "";  //null string constant ( an empty string )
+    char character;
+    while(SASerial.available()) 
+    {
+      character = SASerial.read();
+      content.concat(character);
+    }
+    if (content != "") 
+    {
+      Serial.print(content);
+    }
+    
+    tempmillis = currentMillis;
   }
 
 }
@@ -655,7 +741,7 @@ void loop()
  * External Display Functions
  * 
  * NeoPixelSet
- *    Changes the Neo Pixel's RGB value
+ *    Changes the Neo Pixel's RGB value. (0,0,0) for off
  ******************************************************************************/
 void NeoPixelSet(uint32_t R, uint32_t G, uint32_t B)
 {
@@ -711,55 +797,84 @@ void SA818Connect(void)
   byte rxlen=0;   // counter for received bytes
   do
   {
-    Serial1.println("AT+DMOCONNECT");         // begin message
-    rxlen=Serial1.readBytesUntil('\n',rxbuffer,19);
+    SASerial.println("AT+DMOCONNECT");         // begin message
+    rxlen=SASerial.readBytesUntil('\n',rxbuffer,19);
   } while(rxlen==0);    // send command until answer is received
   rxbuffer[rxlen-1]=0;  // check length of answer and remove cr character
   rxbuffer[rxlen]=0; // remove last byte and end string
   delay(1000);    // wait a little bit
 }
 
-void SA818SetGroup(byte bw, float txfrequency, float rxfrequency, byte txctcss, byte squelch, byte rxctcss)
+void SA818SetGroup()
 {
-  Serial1.print("AT+DMOSETGROUP=");
-  Serial1.print(bw);
-  Serial1.print(",");
-  Serial1.print(txfrequency);
-  Serial1.print(",");
-  Serial1.print(rxfrequency);
-  Serial1.print(",00");
-  if(txctcss<10) Serial1.print("0");
-  Serial1.print(txctcss);
-  Serial1.print(",");    
-  Serial1.print(squelch);
-  Serial1.println(",00");
-  if(rxctcss<10) Serial1.print("0");
+  digitalWrite(PD_Pin, HIGH); // LOW for power down mode, HIGH for normal mode
+  digitalWrite(PTT_Pin, LOW); // LOW is RX, High is TX
+  delay(3000);  // Takes about 3 seconds for SA818 to come out of PD state
+
+  SA818Connect();
+  preferences.begin("settings", true);
+    txfrequency = preferences.getFloat("txfrequency");
+    rxfrequency = preferences.getFloat("rxfrequency");
+    bandwidth = preferences.getChar("bandwidth");
+    squelch = preferences.getChar("squelch");
+  preferences.end();
+  byte txctcss = 0;
+  byte rxctcss = 0;
+  
+  SASerial.print("AT+DMOSETGROUP=");
+  SASerial.print(bandwidth);
+  SASerial.print(",");
+  SASerial.print(txfrequency, 4);
+  SASerial.print(",");
+  SASerial.print(rxfrequency, 4);
+  SASerial.print(",00");
+  if(txctcss<10) SASerial.print("0");
+  SASerial.print(txctcss);
+  SASerial.print(",");    
+  SASerial.print(squelch);
+  SASerial.print(",00");
+  if(rxctcss<10) SASerial.print("0");
+  SASerial.println(txctcss);
+  digitalWrite(PD_Pin, LOW); // Put the SA818 back into PD state
 }
 
-void SA818SetVolume(byte volume)
+void SA818SetVolume()
 {
-  Serial1.print("AT+DMOSETVOLUME=");
-  Serial1.println(volume);
+  digitalWrite(PD_Pin, HIGH); // LOW for power down mode, HIGH for normal mode
+  digitalWrite(PTT_Pin, LOW); // LOW is RX, High is TX
+  delay(3000);  // Takes about 3 seconds for SA818 to come out of PD state
+  
+  SA818Connect();
+  preferences.begin("settings", true);
+    volume = preferences.getChar("volume", 5);
+  preferences.end();
+  SASerial.print("AT+DMOSETVOLUME=");
+  SASerial.println(volume);
+  digitalWrite(PD_Pin, LOW); // Put the SA818 back into PD state
 }
 
+/*
 void SA818SetFilter(byte prefilter, byte highpassfilter, byte lowpassfilter)
 {
-  Serial1.print("AT+SETFILTER=");
-  Serial1.print(prefilter);
-  Serial1.print(",");
-  Serial1.print(highpassfilter);
-  Serial1.print(",");
-  Serial1.println(lowpassfilter);
+  SA818Connect();
+  SASerial.print("AT+SETFILTER=");
+  SASerial.print(prefilter);
+  SASerial.print(",");
+  SASerial.print(highpassfilter);
+  SASerial.print(",");
+  SASerial.println(lowpassfilter);
 }
 
 void SA818SetTail(byte tailtone)
 {
-  Serial1.print("AT+SETTAIL=");
-  Serial1.println(tailtone);
+  SA818Connect();
+  SASerial.print("AT+SETTAIL=");
+  SASerial.println(tailtone);
 }
+*/
 
 /****************************************************************************** 
- * These functions are for debugging
+ * These functions are for debugging or displaying info
  * 
  * printVars
  *    Prints out the variables and their values
@@ -822,4 +937,15 @@ void printTimes()
   Serial.printf("%02d/%02d/%04d (%02d:%02d:%02d)\n", now.month(), now.day(), now.year(), now.hour(), now.minute(), now.second());
   Serial.println("******************************************************************************");
   Serial.println();
+}
+
+void printTemp()
+{
+    Serial.println("***Temperature****************************************************************");
+    Serial.print(rtc.getTemperature());
+    Serial.println(" C");
+    Serial.print(rtc.getTemperature()*1.8+32);
+    Serial.println(" F");
+    Serial.println("******************************************************************************");
+    Serial.println();
 }

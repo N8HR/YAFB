@@ -136,13 +136,8 @@ int ledc_resolution = 8;
  ******************************************************************************/
  
  /****************************************************************************** 
- * The playMeody fuction was adpated from:
- * 
- * Tetris theme - (Korobeiniki)   
- * Connect a piezo buzzer or speaker to pin 11 or select a new pin.   
- * More songs available at https://github.com/robsoncouto/arduino-songs
- *                                                 
- *                                                 Robson Couto, 2019
+ * The playMelody fuction was adpated from:
+ * https://github.com/robsoncouto/arduino-songs
  *                                                 
  * From https://github.com/robsoncouto/arduino-songs/blob/master/README.md
  *  Commit 8fb1283 on Feb 13, 2019 
@@ -159,7 +154,7 @@ int ledc_resolution = 8;
 void playMelody() 
 {
   // Change this to make the song slower or faster
-  int tempo = 144;
+  int tempo = 140;
   
   // Notes of the moledy followed by the duration
   // A 4 means a quarter note, 8 an eighteenth , 16 sixteenth, so on
@@ -167,16 +162,25 @@ void playMelody()
   //  so -4 means a dotted quarter note, that is, a quarter plus an eighteenth!!
   int melody[] = 
   {
-    //Based on the arrangement at https://www.flutetunes.com/tunes.php?id=192
-    NOTE_E5, 4,  NOTE_B4,8,  NOTE_C5,8,  NOTE_D5,4,  NOTE_C5,8,  NOTE_B4,8,
-    NOTE_A4, 4,  NOTE_A4,8,  NOTE_C5,8,  NOTE_E5,4,  NOTE_D5,8,  NOTE_C5,8,
-    NOTE_B4, -4,  NOTE_C5,8,  NOTE_D5,4,  NOTE_E5,4,
-    NOTE_C5, 4,  NOTE_A4,4,  NOTE_A4,8,  NOTE_A4,4,  NOTE_B4,8,  NOTE_C5,8,
-  
-    NOTE_D5, -4,  NOTE_F5,8,  NOTE_A5,4,  NOTE_G5,8,  NOTE_F5,8,
-    NOTE_E5, -4,  NOTE_C5,8,  NOTE_E5,4,  NOTE_D5,8,  NOTE_C5,8,
-    NOTE_B4, 4,  NOTE_B4,8,  NOTE_C5,8,  NOTE_D5,4,  NOTE_E5,4,
-    NOTE_C5, 4,  NOTE_A4,4,  NOTE_A4,4, 
+    // LOW
+    NOTE_A4,8,  NOTE_A4,8,  NOTE_E4,8, NOTE_E4,8, NOTE_C4,8,  NOTE_C4,8,  NOTE_E4,8, NOTE_E4,8, 
+    NOTE_A4,8,  NOTE_A4,8,  NOTE_E4,8, NOTE_E4,8, NOTE_C4,8,  NOTE_C4,8,  NOTE_E4,8, NOTE_E4,8, 
+
+    // HIGH
+    NOTE_A5,8,  NOTE_A5,8,  NOTE_E5,8, NOTE_E5,8, NOTE_C5,8,  NOTE_C5,8,  NOTE_E5,8, NOTE_E5,8, 
+    NOTE_A5,8,  NOTE_A5,8,  NOTE_E5,8, NOTE_E5,8, NOTE_C5,8,  NOTE_C5,8,  NOTE_E5,8, NOTE_E5,8, 
+
+    // MEDIUM
+    NOTE_C4,8,  NOTE_C4,8,  NOTE_A5,8, NOTE_A5,8, NOTE_E4,8,  NOTE_E4,8,  NOTE_A5,8, NOTE_A5,8, 
+    NOTE_C4,8,  NOTE_C4,8,  NOTE_A5,8, NOTE_A5,8, NOTE_E4,8,  NOTE_E4,8,  NOTE_A5,8, NOTE_A5,8, 
+
+    // HIGH
+    NOTE_A5,8,  NOTE_A5,8,  NOTE_E5,8, NOTE_E5,8, NOTE_C5,8,  NOTE_C5,8,  NOTE_E5,8, NOTE_E5,8, 
+    NOTE_A5,8,  NOTE_A5,8,  NOTE_E5,8, NOTE_E5,8, NOTE_C5,8,  NOTE_C5,8,  NOTE_E5,8, NOTE_E5,8, 
+
+    // LOW
+    NOTE_A4,4, NOTE_E4,4, NOTE_C4,8, NOTE_E4,4, 
+    NOTE_A4,4, NOTE_E4,4, NOTE_C4,8, NOTE_E4,4, 
   };
   
   // sizeof gives the number of bytes, each int value is composed of two bytes (16 bits)
