@@ -12,3 +12,8 @@ My goal is to provide a way to make a cheap alternative fox transmitter. When do
 ## Features
 * 1W VHF or UHF transmitter (NiceRF SA818)
 * Configure it over WiFi
+
+## PCB
+
+![PCB Front](PCB_fox_front.png)
+![PCB Back](PCB_fox_Back.png)
