@@ -15,5 +15,5 @@ My goal is to provide a way to make a cheap alternative fox transmitter. When do
 
 ## PCB
 
-![PCB Front](PCB_fox_front.png)
-![PCB Back](PCB_fox_Back.png)
+![PCB Front](fox3d_front.png)
+![PCB Back](fox3d_back.png)
