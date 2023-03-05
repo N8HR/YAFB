@@ -14,6 +14,6 @@ My goal is to provide a way to make a cheap alternative fox transmitter. When do
 * Configure it over WiFi
 
 ## PCB
-
-<img src="fox3d_v3_front.png" width="350">
-<img src="fox3d_v3_back.png" width="350">
+|Front|Back|
+|:-:|:-:|
+|![PCB Front](fox3d_v3_front.png)|![PCB Back](fox3d_v3_back.png)|
