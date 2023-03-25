@@ -17,3 +17,19 @@ My goal is to provide a way to make a cheap alternative fox transmitter. When do
 |Front|Back|
 |:-:|:-:|
 |![PCB Front](fox3d_v3_front.png)|![PCB Back](fox3d_v3_back.png)|
+
+## Parts
+* 1x ESP32-S2-Saola-1R Dev Board (Microcontroller)
+* 1x NiceRF SA818(S) (Transmitter)
+* 1x DS3231 RTC Module (Real Time Clock)
+* 1x Mini-Circuits LFCN-160+ (Low Pass Filter)
+* 3x 10k Resistors
+* 1x 3.3k Resistor
+* 1x 1.8k Resistor
+* 1x 1k Resistor
+* 2x 150 Resistor
+* 1x 1uF Capacitor
+* 2x 2N7000 Transistor
+* 2x TB002-500-02BE Terminal Blocks
+* Male and Female Header Connectors
+* 5v Power Source
