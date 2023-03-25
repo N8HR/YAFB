@@ -35,5 +35,5 @@ My goal is to provide a way to make a cheap alternative fox transmitter. When do
 * 5v Power Source
 
 ## Licenses
-The hardware side of this project uses the CERN Open Hardware Licence Version 2 - Weakly Reciprocal (CERN-OHL-W-2.0)
-The software side of this project uses the GNU General Public License v3.0 only (GNU GPLv3-only)
+* The hardware side of this project uses the CERN Open Hardware Licence Version 2 - Weakly Reciprocal (CERN-OHL-W-2.0)
+* The software side of this project uses the GNU General Public License v3.0 only (GNU GPLv3-only)
