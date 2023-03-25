@@ -1,0 +1,10 @@
+(sym_lib_table
+  (lib (name "DRA818V")(type "Legacy")(uri "/home/newtoz/projects/YAFB/Kicad Lib/DRA818V/DRA818V.lib")(options "")(descr ""))
+  (lib (name "ESP32-S2-SAOLA-1M")(type "Legacy")(uri "/home/newtoz/projects/YAFB/Kicad Lib/ESP32-S2-SAOLA-1M/ESP32-S2-SAOLA-1M.lib")(options "")(descr ""))
+  (lib (name "SDCardSPI")(type "Legacy")(uri "/home/newtoz/projects/YAFB/Kicad Lib/SD Card/SDCardSPI.lib")(options "")(descr ""))
+  (lib (name "dk_Coaxial-Connectors-RF")(type "Legacy")(uri "/home/newtoz/projects/YAFB/Kicad Lib/digikey-kicad-library/digikey-symbols/dk_Coaxial-Connectors-RF.lib")(options "")(descr ""))
+  (lib (name "dra818u")(type "Legacy")(uri "/home/newtoz/projects/YAFB/Kicad Lib/DRA818U_AND_V_Kicad-master/dra818u.lib")(options "")(descr ""))
+  (lib (name "L101011MS02Q")(type "Legacy")(uri "/home/newtoz/projects/YAFB/Kicad Lib/L101011MS02Q/L101011MS02Q.lib")(options "")(descr ""))
+  (lib (name "Connector_ESP32")(type "Legacy")(uri "/home/newtoz/projects/YAFB/Kicad Lib/connectors/Connector_ESP32.lib")(options "")(descr ""))
+  (lib (name "fox-rescue")(type "Legacy")(uri "${KIPRJMOD}/fox-rescue.lib")(options "")(descr ""))
+)

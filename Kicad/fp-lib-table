@@ -1,0 +1,7 @@
+(fp_lib_table
+  (lib (name digikey-footprints)(type KiCad)(uri "/home/newtoz/projects/YAFB/Kicad Lib/digikey-kicad-library/digikey-footprints.pretty")(options "")(descr ""))
+  (lib (name 2021-04-11_18-38-50)(type KiCad)(uri "/home/newtoz/projects/YAFB/Kicad Lib/2021-04-11_18-38-50")(options "")(descr ""))
+  (lib (name DRA818U_AND_V_Kicad-master)(type KiCad)(uri "/home/newtoz/projects/YAFB/Kicad Lib/DRA818U_AND_V_Kicad-master")(options "")(descr ""))
+  (lib (name L101011MS02Q)(type KiCad)(uri "/home/newtoz/projects/YAFB/Kicad Lib/L101011MS02Q")(options "")(descr ""))
+  (lib (name logo)(type KiCad)(uri "/home/newtoz/projects/YAFB/Kicad Lib/logo.pretty")(options "")(descr ""))
+)
