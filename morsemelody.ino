@@ -22,7 +22,7 @@
  */
 
 // ESP32-S2 Settings
-#define Sound_Pin 11
+#define Sound_Pin 1
 
 // ledc Settings
 int ledc_freq = 2000;
