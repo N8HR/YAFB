@@ -4,6 +4,7 @@
 YAFB is an amateur radio fox transmitter designed for an ESP32-S2-Saola-1 and a NiceRF SA818.
 
 Still being worked on and now works fairly well on my bench. Hasn't been tested yet in the field.
+As of July 17, 20023 just sent in to have v4 of the board to be made. More updates soon.
 
 I started this because I was too cheap to buy one and I had way too much time on my hands. And I kind of am enjoying it. Weird. 
 
