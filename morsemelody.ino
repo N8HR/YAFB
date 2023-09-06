@@ -2,9 +2,9 @@
  *   This file is part of Yet Another Foxbox (YAFB).
  *   
  *   Yet Another Foxbox (YAFB) is an amateur radio fox transmitter 
- *   designed for an ESP32-S2-Saola-1 and a NiceRF SA818.
+ *   designed for an ESP32-DevKitM-1 and a NiceRF SA818.
  *   
- *   Copyright (c) 2021 Gregory Stoike (KN4CK).
+ *   Copyright (c) 2021-2023 Gregory Stoike (N8HR).
  *   
  *   YAFB is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
