@@ -1,7 +1,7 @@
 <img src="YAFB_logo.png" alt="logo" width="300" height="300" align="right" />
 
 # Yet Another Foxbox (YAFB)
-YAFB is an amateur radio fox transmitter designed for an ESP32-S2-Saola-1 and a NiceRF SA818.
+YAFB is an amateur radio fox transmitter designed for an ESP32-DevKitM-1 and a NiceRF SA818.
 
 Still being worked on and now works fairly well on my bench. Hasn't been tested yet in the field.
 As of July 17, 2023 just sent in to have v4 of the board to be made. More updates soon.
@@ -20,7 +20,7 @@ My goal is to provide a way to make a cheap alternative fox transmitter. When do
 |![PCB Front](fox3d_v3_front.png)|![PCB Back](fox3d_v3_back.png)|
 
 ## Parts
-* 1x ESP32-S2-Saola-1R Dev Board (Microcontroller)
+* 1x ESP32-DevKitM-1 Dev Board (Microcontroller)
 * 1x NiceRF SA818(S) (Transmitter)
 * 1x DS3231 RTC Module (Real Time Clock)
 * 1x Mini-Circuits LFCN-160+ (Low Pass Filter)
