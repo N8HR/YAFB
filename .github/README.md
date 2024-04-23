@@ -1,6 +1,8 @@
-<img src="YAFB_logo.png" alt="logo" width="300" height="300" align="right" />
 
 # Yet Another Foxbox (YAFB)
+
+<img src="YAFB_logo.png" alt="logo" width="300" height="300" align="right" />
+
 YAFB is an amateur radio fox transmitter designed for an ESP32-S2-Saola-1 and a NiceRF SA818.
 
 Still being worked on and now works fairly well on my bench. Hasn't been tested yet in the field.
