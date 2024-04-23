@@ -4,7 +4,7 @@
 YAFB is an amateur radio fox transmitter designed for an ESP32-S2-Saola-1 and a NiceRF SA818.
 
 Still being worked on and now works fairly well on my bench. Hasn't been tested yet in the field.
-As of July 17, 2023 just sent in to have v4 of the board to be made. More updates soon.
+As of Nov 2023 just sent in to have v4.1 of the board to be made. More updates soon.
 
 I started this because I was too cheap to buy one and I had way too much time on my hands. And I kind of am enjoying it. Weird. 
 
@@ -12,12 +12,12 @@ My goal is to provide a way to make a cheap alternative fox transmitter. When do
 
 ## Features
 * 1W VHF or UHF transmitter (NiceRF SA818)
-* Configure it over WiFi
+* Configure it over Bluetooth
 
 ## PCB
 |Front|Back|
 |:-:|:-:|
-|![PCB Front](fox3d_v3_front.png)|![PCB Back](fox3d_v3_back.png)|
+|<img src="fox3d_v4.1_front.png" height="500">|<img src="fox3d_v4.1_back.png" height="500">|
 
 ## Parts
 * 1x ESP32-S2-Saola-1R Dev Board (Microcontroller)
@@ -34,6 +34,7 @@ My goal is to provide a way to make a cheap alternative fox transmitter. When do
 * 2x TB002-500-02BE Terminal Blocks
 * Male and Female Header Connectors
 * 5v Power Source
+* Optional Push Button
 
 ## Licenses
 * The hardware side of this project uses the CERN Open Hardware Licence Version 2 - Weakly Reciprocal (CERN-OHL-W-2.0)

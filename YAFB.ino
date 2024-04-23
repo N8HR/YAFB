@@ -2,9 +2,9 @@
  *   This file is part of Yet Another Foxbox (YAFB).
  *   
  *   Yet Another Foxbox (YAFB) is an amateur radio fox transmitter 
- *   designed for an ESP32-S2-Saola-1 and a NiceRF SA818.
+ *   designed for an ESP32-DevKitM-1 and a NiceRF SA818.
  *   
- *   Copyright (c) 2021 Gregory Stoike (KN4CK).
+ *   Copyright (c) 2021-2023 Gregory Stoike (N8HR).
  *   
  *   YAFB is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -25,23 +25,13 @@
 /****************************************************************************** 
  *   Todo:
  *   
- *   Website
- *    * sanitize inputs
- *      *callmessage pattern
  *   General
  *    * Implement Start/Stop time function
  *    *
  ******************************************************************************/
 
 
-#include <Adafruit_NeoPixel.h>  // Used for the NeoPixel LED on GPIO 18
-#include <WiFi.h>               // For Wifi
-#include <WiFiAP.h>             // For WiFi
-#include <WiFiClient.h>         // For WiFi
-#include <AsyncTCP.h>           // For Webserver
-#include <ESPAsyncWebServer.h>  // For Webserver
 #include <Preferences.h>        // For storing variables that survive a reset
-#include <ESPmDNS.h>            // For DNS resolving
 #include "RTClib.h"             // For DS3231 RTC Module
 #include <Wire.h>               // For I2C Communication (DS3231)
 
@@ -64,10 +54,6 @@ byte bandwidth = 1; // Bandwidth, 0=12.5k, 1=25K
 byte squelch = 1; // Squelch 0-8, 0 is listen/open
 byte volume = 5; // Volume 1-8
 
-// NeoPixel Settings
-#define NeoPixel_PIN 18
-Adafruit_NeoPixel NeoPixel(1, NeoPixel_PIN, NEO_GRB + NEO_KHZ800);
-
 // ESP32-S2 Settings
 #define PTT_Pin 2 
 #define PD_Pin 3
@@ -87,355 +73,8 @@ unsigned long radiomillis = 1000000;
 unsigned long tempmillis = 1000000;
 boolean updateSAsettingsFlag = false;
 
-// Web Server Settings
-AsyncWebServer server(80);
-
-// HTML web page
-const char index_html[] PROGMEM = R"rawliteral(
-  <!doctype html>
-  <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <title>Yet Another Foxbox</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" href="data:,">
-    <style>
-      html 
-      {
-        font-family: Arial, sans-serif;
-      }
-  
-      .switch  /* The switch - the box around the slider */
-      {
-        position: relative;
-        display: inline-block;
-        width: 60px;
-        height: 34px;
-      }
-  
-      .switch input[type=checkbox]  /* Hide default HTML checkbox */
-      {
-        opacity: 0;
-        width: 0;
-        height: 0;
-      }
-  
-      .slider  /* The slider */
-      {
-        position: absolute;
-        cursor: pointer;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: #ccc;
-        -webkit-transition: .4s;
-        transition: .4s;
-      }
-  
-      .slider:before
-      {
-        position: absolute;
-        content: "";
-        height: 26px;
-        width: 26px;
-        left: 4px;
-        bottom: 4px;
-        background-color: white;
-        -webkit-transition: .4s;
-        transition: .4s;
-      }
-  
-      input[type=checkbox]:checked + .slider 
-      {
-        background-color: #2196F3;
-      }
-  
-      input[type=checkbox]:focus + .slider 
-      {
-        box-shadow: 0 0 1px #2196F3;
-      }
-  
-      input[type=checkbox]:checked + .slider:before 
-      {
-        -webkit-transform: translateX(26px);
-        -ms-transform: translateX(26px);
-        transform: translateX(26px);
-      }
-  
-      .slider.round  /* Rounded sliders */
-      {
-        border-radius: 34px;
-      }
-  
-      .slider.round:before  /* Rounded sliders */
-      {
-        border-radius: 50%;
-      }
-  
-      input[type="text"], input[type="date"], input[type="time"], input[type="number"], select
-      {
-        width: 100%;
-        padding: 12px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        box-sizing: border-box;
-        background: white;
-        color: black;
-      }
-      
-      input[type=submit] 
-      {
-        background-color: #2196F3;
-        color: white;
-        padding: 12px 20px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-      }
-  
-      input[type=reset] 
-      {
-        background-color: #ccc;
-        padding: 12px 20px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-      }
-  
-      .container 
-      {
-        display: grid;
-        grid-template-columns: 120px 150px 150px;
-        grid-gap: 10px;
-        justify-content: center;
-        align-items: center;
-        padding-bottom: 20px;
-      }
-  
-      .titlebox
-      {
-        grid-column: span 3;
-        text-align: center;
-      }
-
-      .spantwo
-      {
-        grid-column: span 2;  
-      }
-  </style>
-  
-  </head>
-  <body>
-  
-  <form action="/gettransmitter">
-  <div class="container">
-    <div class="titlebox"><h2>Yet Another Foxbox</h2></div>
-    <div>Transmitter:</div>
-    <div class="spantwo"><label class="switch"><input type="checkbox" name="webonoff" ~ONOFF~><span class="slider round"></span></label></div>
-    <div><input type="reset"></div>
-    <div><input type="submit" value="Submit"></div>
-  </div>
-  </form>
-  <form action="/getfoxsettings">
-  <div class="container">
-    <div><label class="textlabel" for="callmessage">Callsign:</label></div>
-    <div class="spantwo"><input type="text" id="callmessage" name="webcallmessage" value="~CALLMESSAGE~" title="This message will be transmitted via morse" pattern="[a-zA-z0-9\s]+" required /></div>
-  
-    <div><label class="textlabel" for="txfrequency">TX Frequency:</label></div>
-    <div class="spantwo"><input type="number" id="txfrequency" name="webtxfrequency" value="~TXFREQUENCY~" step="0.001" min="134" max="174" title="Transmitted frequency" required /></div>
-    
-    <!--These will be added if implemented
-    <div><label class="textlabel" for="rxfrequency">RX Frequency:</label></div>
-    <div class="spantwo"><input type="text" id="rxfrequency" name="webrxfrequency" value="~RXFREQUENCY~" pattern="[0-9]{3}[.][0-9]{3}"></div>
-  
-    <div><label for="bandwidth">Bandwidth:</label></div>
-    <div class="spantwo"><select id="bandwidth" name="webbandwidth">~BANDWIDTH~</select></div>
-  
-    <div><label for="volume">Volume:</label></div>
-    <div class="spantwo"><select id="volume" name="webvolume">~VOLUME~</select></div>
-
-    <div><label for="squelch">Squelch:</label></div>
-    <div class="spantwo"><select id="squelch" name ="websquelch">~SQUELCH~</select></div>
-    -->
-    <div><label for="timebetween">Time Interval:</label></div>
-    <div class="spantwo"><input type="number" id="timebetween" name="webtimebetween" value="~TIMEBETWEEN~" step="1" min="5" title="Time between transmissions" required /></div>
-    
-    <div><input type="reset"></div>
-    <div><input type="submit" value="Submit"></div>
-  </div>
-  </form>
-  <form action="/getcurrenttime">
-  <div class="container">
-    <div><label for="currenttime">Current time:</label></div>
-    <div><input type="date" id="currentdate" name="webcurrentdate" value="~CURRENTDATE~"></div>
-    <div><input type="time" id="currenttime" name="webcurrenttime" value="~CURRENTTIME~"></div>
-    
-    <div><input type="reset"></div>
-    <div><input type="submit" value="Submit"></div>
-  </div>
-  </form>
-  <form action="/getstartendtime">
-  <div class="container">
-    <div><label for="starttime">Start fox at:</label></div>
-    <div><input type="date" id="startdate" name="webstartdate" value="~STARTDATE~"></div>
-    <div><input type="time" id="starttime" name="webstarttime" value="~STARTTIME~"></div>
-  
-    <div><label for="stoptime">Stop fox at:</label></div>
-    <div><input type="date" id="stopdate" name="webenddate" value="~ENDDATE~"></div>
-    <div><input type="time" id="stoptime" name="webendtime" value="~ENDTIME~"></div>
-  
-    <div><input type="reset"></div>
-    <div><input type="submit" value="Submit"></div>
-  </div>
-  </form>
-  
-  </body>
-  </html>
-  )rawliteral";
-
-String processor(const String& var)
-{
-  if(var == "ONOFF")
-  {
-    if (onoff==true)
-    {
-      return String("checked");
-    }
-  }
-  
-  if(var == "CALLMESSAGE")
-  {
-      return String(callmessage);  
-  }
-  
-  if(var == "TXFREQUENCY")
-  {
-      return String(txfrequency,3);  
-  }
-  
-  if(var == "RXFREQUENCY")
-  {
-      return String(rxfrequency,3);  
-  }
-  
-  if(var == "BANDWIDTH")
-  {
-    if (bandwidth == 0)
-    {
-      char temp[70];
-      return (String("<option value=\"0\" selected>12.5K</option><option value=\"1\">25K</option>"));
-    }
-    else if (bandwidth == 1)
-    {
-      return (String("<option value=\"0\">12.5K</option><option value=\"1\" selected>25K</option>"));
-    }
-  } 
-
-  if (var == "VOLUME")
-  {
-    String temp;
-    for (int i = 1; i <= 8; i++)
-    {
-      temp.concat("<option value=\"");
-      temp.concat(i);
-      temp.concat("\"");
-      if (i == volume)
-      {
-        temp.concat(" selected");
-      }
-      temp.concat(">");
-      temp.concat(i);
-      temp.concat("</option>");
-    }
-    return temp;
-  }
-
-  if (var == "SQUELCH")
-  {
-    String temp;
-    for (int i = 0; i <= 8; i++)
-    {
-      temp.concat("<option value=\"");
-      temp.concat(i);
-      temp.concat("\"");
-      if (i == squelch)
-      {
-        temp.concat(" selected");
-      }
-      temp.concat(">");
- 
-      if (i == 0)
-      {
-        temp.concat("off");
-      }
-      else
-      {
-        temp.concat(i);
-      }
-      temp.concat("</option>");
-    }
-    return temp;
-  }
-
-  if (var == "TIMEBETWEEN")
-  {
-      return String(timebetween/1000);  
-  }
-
-  if (var == "CURRENTDATE")
-  {
-    getLocalTime(&tmcurrenttime);
-    char temp[20];
-    strftime(temp, 20, "%Y-%m-%d", &tmcurrenttime);
-    return temp;
-  }
-
-  if (var == "CURRENTTIME")
-  {
-    getLocalTime(&tmcurrenttime);
-    char temp[20];
-    strftime(temp, 20, "%H:%M", &tmcurrenttime);
-    return temp;
-  }
-  
-  if (var == "STARTDATE")
-  {
-    char temp[20];
-    strftime(temp, 20, "%Y-%m-%d", &tmstarttime);
-    return temp;
-  }
-  
-  if (var == "STARTTIME")
-  {
-    char temp[20];
-    strftime(temp, 20, "%H:%M", &tmstarttime);
-    return temp;
-  }
-  
-  if (var == "ENDDATE")
-  {
-    char temp[20];
-    strftime(temp, 20, "%Y-%m-%d", &tmendtime);
-    return temp;
-  }
-  
-  if (var == "ENDTIME")
-  {
-    char temp[20];
-    strftime(temp, 20, "%H:%M", &tmendtime);
-    return temp;
-  }
- 
-  return String();
-}
-
-void notFound(AsyncWebServerRequest *request)
-{
-  request->send(404, "text/plain", "Not found");
-}
-
 HardwareSerial SASerial(1);
+
 /****************************************************************************** 
  * Standard Setup Function
  ******************************************************************************/
@@ -456,24 +95,15 @@ void setup()
     squelch = preferences.getChar("squelch", 1);
     volume = preferences.getChar("volume", 5);
     
-    time_t starttemp = preferences.getULong("starttime", 1609459200);
+    time_t starttemp = preferences.getULong("starttime", 500001720);
     localtime_r(&starttemp, &tmstarttime);
     
-    time_t endtemp = preferences.getULong("endtime", 1609459200);
+    time_t endtemp = preferences.getULong("endtime", 1704067200);
     localtime_r(&endtemp, &tmendtime);
 
     callmessage = preferences.getString("callmessage", "N0CALL Fox");
     morse = preferences.getString("morse", "-. ----- -.-. .- .-.. .-.. / ..-. --- -..-");
   preferences.end();
-
-  // WiFi Settings
-  const char* wifi_ssid = "YAFB";
-  const char* wifi_password = "11111111";
-  const uint8_t wifi_channel = 11;
-  IPAddress local_IP(10,73,73,73);
-  IPAddress gateway(10,73,73,1);
-  IPAddress subnet(255,255,255,0);
-
   
   // Set pins
   pinMode(PTT_Pin, OUTPUT);
@@ -485,203 +115,23 @@ void setup()
   
   // Start the I2C interface
   Wire.begin(SDA_Pin, SCL_Pin);
-  
-  // Start NeoPixel and set it to off
-  NeoPixel.setBrightness(1); // 1-255
-  NeoPixel.begin();
-  NeoPixel.show();
-  
-  // Start Wifi and put in AP mode
-  WiFi.softAPConfig(local_IP, gateway, subnet);
-  WiFi.softAP(wifi_ssid, wifi_password, wifi_channel);
 
-  // Start mDNS to allow yafb.local to work
-  if (!MDNS.begin("yafb")) 
-  {
-      Serial.println("Error setting up MDNS responder!");
-      while(1) {
-          delay(1000);
-      }
-  }
+/*  
+    Stored for later use
 
-  // Send web page with input fields to client
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-  {
-    request->send_P(200, "text/html", index_html, processor);
-  });
-
-  server.on("/gettransmitter", HTTP_GET, [] (AsyncWebServerRequest *request)
-  {
-    preferences.begin("settings", false);
-    
-    if (request->hasParam("webonoff")) 
-    {
-      onoff = request->getParam("webonoff")->value();
-      preferences.putBool("onoff", onoff);
-      Serial.print("onoff value: ");
-      Serial.println(onoff);
-    }
-    else
-    {
-      onoff = 0; // HTML doesn't submit false with checkboxes, only true
-      preferences.putBool("onoff", onoff);
-      Serial.print("onoff value: ");
-      Serial.println(onoff);
-    }
-
-    preferences.end();
-    
-    request->send(200, "text/html", "<meta http-equiv=\"refresh\" content=\"0; URL=/\" />");
-  });
-
-  server.on("/getfoxsettings", HTTP_GET, [] (AsyncWebServerRequest *request)
-  {
-    preferences.begin("settings", false);
-
-    Serial.println("***webValueUpdates************************************************************");
-    if (request->hasParam("webcallmessage")) 
-    {
-      callmessage = request->getParam("webcallmessage")->value();
-      preferences.putString("callmessage", callmessage);
-      Serial.print("webcallmessage value: ");
-      Serial.println(callmessage);
-      
-      morse = createMorse(callmessage);
-      preferences.putString("morse", morse);
-      Serial.print("morse: ");
-      Serial.println(morse);
-    }
-    
-    if (request->hasParam("webtxfrequency")) 
-    {
-      txfrequency = (request->getParam("webtxfrequency")->value()).toFloat();
-      preferences.putFloat("txfrequency", txfrequency);
-      Serial.print("webtxfrequency value: ");
-      Serial.println(txfrequency, 3);
-    }
-    
-    if (request->hasParam("webrxfrequency")) 
-    {
-      rxfrequency = (request->getParam("webrxfrequency")->value()).toFloat();
-      preferences.putFloat("rxfrequency", rxfrequency);
-      Serial.print("webrxfrequency value: ");
-      Serial.println(rxfrequency, 3);
-    }
-    
-    if (request->hasParam("webbandwidth")) 
-    {
-      bandwidth = (request->getParam("webbandwidth")->value()).toInt();
-      preferences.putChar("bandwidth", bandwidth);
-      Serial.print("webbandwidth value: ");
-      Serial.println(bandwidth);
-    }
- 
-    if (request->hasParam("webvolume")) 
-    {
-      volume = (request->getParam("webvolume")->value()).toInt();
-      preferences.putChar("volume", volume);
-      Serial.print("webvolume value: ");
-      Serial.println(volume);
-    }
-
-    if (request->hasParam("websquelch")) 
-    {
-      squelch = (request->getParam("websquelch")->value()).toInt();
-      preferences.putChar("squelch", squelch);
-      Serial.print("websquelch value: ");
-      Serial.println(squelch);
-    }
-
-    if (request->hasParam("webtimebetween")) 
-    {
-      timebetween = (request->getParam("webtimebetween")->value()).toInt();
-      timebetween = timebetween * 1000;
-      preferences.putChar("timebetween", timebetween);
-      Serial.print("webtimebetween value: ");
-      Serial.println(timebetween);
-    }
-    Serial.println("******************************************************************************");
-    Serial.println();
-    
-    preferences.end();
-
-    updateSAsettingsFlag = true;
-    
-    request->send(200, "text/html", "<meta http-equiv=\"refresh\" content=\"0; URL=/\" />");
-  });
-  
-  server.on("/getcurrenttime", HTTP_GET, [] (AsyncWebServerRequest *request)
-  {
-    preferences.begin("settings", false);
-
-    if (request->hasParam("webcurrentdate") && request->hasParam("webcurrenttime"))
-    {
-      String tempdate = request->getParam("webcurrentdate")->value();
-      String temptime = request->getParam("webcurrenttime")->value();
-
-      strptime(tempdate.c_str(), "%Y-%m-%d", &tmcurrenttime);
-      strptime(temptime.c_str(), "%H:%M", &tmcurrenttime);
-
-      time_t allthoseseconds = mktime(&tmcurrenttime);
-      struct timeval tv{ .tv_sec = allthoseseconds };
-      settimeofday(&tv, NULL);
-
-      Serial.print("webcurrentdate/time value: ");
-      Serial.print(tempdate);
-      Serial.print(" ");
-      Serial.println(temptime);
-    }
-    
-    preferences.end();
-    
-    request->send(200, "text/html", "<meta http-equiv=\"refresh\" content=\"0; URL=/\" />");
-  });
-  
-  server.on("/getstartendtime", HTTP_GET, [] (AsyncWebServerRequest *request)
-  {
-    preferences.begin("settings", false);
-    if (request->hasParam("webstartdate") && request->hasParam("webstarttime")) 
-    {
-      String tempdate = request->getParam("webstartdate")->value();
-      String temptime = request->getParam("webstarttime")->value();
-      
-      strptime(tempdate.c_str(), "%Y-%m-%d", &tmstarttime);
-      strptime(temptime.c_str(), "%H:%M", &tmstarttime);
-
-      time_t temp = mktime(&tmstarttime);
-      preferences.putULong("starttime", temp);
-
-      Serial.print("webstartdate/time value: ");
-      Serial.print(tempdate);
-      Serial.print(" ");
-      Serial.println(temptime);
-    }
-    
-    if (request->hasParam("webenddate") && request->hasParam("webendtime")) 
-    {
-      String tempdate = request->getParam("webenddate")->value();
-      String temptime = request->getParam("webendtime")->value();
-      
-      strptime(tempdate.c_str(), "%Y-%m-%d", &tmendtime);
-      strptime(temptime.c_str(), "%H:%M", &tmendtime);
-
-      time_t temp = mktime(&tmendtime);
-      preferences.putULong("endtime", temp);
-      
-      Serial.print("webenddate/time value: ");
-      Serial.print(tempdate);
-      Serial.print(" ");
-      Serial.println(temptime);
-    }
-    
-    preferences.end();
-    
-    request->send(200, "text/html", "<meta http-equiv=\"refresh\" content=\"0; URL=/\" />");
-  });
-  
-  server.onNotFound(notFound);
-  server.begin();
-  MDNS.addService("http", "tcp", 80);
+    preferences.putBool("onoff", onoff);
+    preferences.putBool("onoff", onoff);
+    preferences.putString("callmessage", callmessage);
+    preferences.putString("morse", morse);
+    preferences.putFloat("txfrequency", txfrequency);
+    preferences.putFloat("rxfrequency", rxfrequency);
+    preferences.putChar("bandwidth", bandwidth);
+    preferences.putChar("volume", volume);
+    preferences.putChar("squelch", squelch);
+    preferences.putChar("timebetween", timebetween);
+    preferences.putULong("starttime", temp);
+    preferences.putULong("endtime", temp);
+*/
 
   // Set RTC time if needed
   if (! rtc.begin()) {
@@ -726,8 +176,6 @@ void loop()
     digitalWrite(PTT_Pin, HIGH); // Put the SA818 in TX mode
     delay(3000);  // Takes about 3 seconds for SA818 to come out of PD state
 
-    NeoPixelSet(255, 0, 0);
-
     // Play the song
     playMelody();
     delay(700); // Just a slight break between
@@ -738,8 +186,6 @@ void loop()
     digitalWrite(PTT_Pin, LOW); // Put the SA818 in RX mode
     digitalWrite(PD_Pin, LOW); // Put the SA818 back into PD state
     // End Transmittion Block
-
-    NeoPixelSet(0, 0, 0);
 
     // Set for gap between tranmissions
     radiomillis = millis();
@@ -774,18 +220,6 @@ void loop()
     updateSAsettings();
 
   }
-}
-
-/****************************************************************************** 
- * External Display Functions
- * 
- * NeoPixelSet
- *    Changes the Neo Pixel's RGB value. (0,0,0) for off
- ******************************************************************************/
-void NeoPixelSet(uint32_t R, uint32_t G, uint32_t B)
-{
-    NeoPixel.setPixelColor(0, R, G, B); // 0 is for the first NeoPixel
-    NeoPixel.show();
 }
 
 /****************************************************************************** 
