@@ -1,3 +1,6 @@
+> [!Note]
+> This is a project that doesn't get enough of my time and is never complete.  
+> If you want an actual product that just works and is based off of this project, see https://github.com/c0ldbru/fox
 
 # Yet Another Foxbox (YAFB)
 
